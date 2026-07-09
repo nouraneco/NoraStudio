@@ -544,7 +544,6 @@ fieldset.field {
 .time-cell {
   display: grid;
   place-items: center;
-  border: 0;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
@@ -553,21 +552,9 @@ fieldset.field {
   font-weight: 800;
 }
 
-.time-edit-button {
-  gap: 6px;
-  width: 100%;
-  height: 100%;
-  color: var(--muted);
-}
-
-.time-edit-button:hover {
+.time-cell:hover {
   color: var(--ink);
   background: var(--amber-soft);
-}
-
-.time-edit-button:focus-visible {
-  outline: 2px solid var(--teal);
-  outline-offset: -2px;
 }
 
 .time-value {
@@ -580,11 +567,20 @@ fieldset.field {
   justify-content: center;
   min-height: 20px;
   padding: 2px 7px;
+  border: 1px solid rgba(201, 147, 50, 0.35);
   border-radius: 999px;
   color: #8a5f15;
   background: var(--amber-soft);
   font-size: 11px;
   font-weight: 800;
+}
+
+.time-edit-label:hover,
+.time-edit-label:focus-visible {
+  color: white;
+  background: var(--amber);
+  outline: 2px solid rgba(201, 147, 50, 0.3);
+  outline-offset: 2px;
 }
 
 .timeline-cell.study {

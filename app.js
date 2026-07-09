@@ -835,10 +835,10 @@ function timelinePage() {
             ${project.times
               .map(
                 (time) => `
-                  <button class="time-cell time-edit-button" data-edit-time="${esc(time)}" type="button" title="時間帯を修正">
+                  <div class="time-cell">
                     <span class="time-value">${esc(time)}</span>
-                    <span class="time-edit-label">編集</span>
-                  </button>
+                    <button class="time-edit-label" data-edit-time="${esc(time)}" type="button">編集</button>
+                  </div>
                   ${project.characters.map((character) => timelineCell(time, character.id)).join("")}
                 `,
               )
