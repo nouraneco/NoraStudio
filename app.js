@@ -837,7 +837,10 @@ function timelinePage() {
                 (time) => `
                   <div class="time-cell">
                     <span class="time-value">${esc(time)}</span>
-                    <button class="time-edit-label" data-edit-time="${esc(time)}" type="button">編集</button>
+                    <span class="time-actions">
+                      <button class="time-edit-label" data-edit-time="${esc(time)}" type="button">編集</button>
+                      <button class="time-delete-label" data-delete-time="${esc(time)}" type="button">削除</button>
+                    </span>
                   </div>
                   ${project.characters.map((character) => timelineCell(time, character.id)).join("")}
                 `,
@@ -1635,9 +1638,27 @@ function deleteItem(kind) {
   render();
 }
 
+function deleteTimelineTime(time) {
+  const count = project.timelineEvents.filter((event) => event.time === time).length;
+  const message =
+    count > 0
+      ? `${time}の行と、この時間帯のカード${count}件を削除します。よろしいですか？`
+      : `${time}の行を削除します。よろしいですか？`;
+  if (!confirmMessage(message)) return;
+  project.times = project.times.filter((item) => item !== time);
+  project.timelineEvents = project.timelineEvents.filter((event) => event.time !== time);
+  if (selectedTimelineEvent()?.time === time) screen.selectedTimelineId = "";
+  render();
+  showToast(`${time}を削除しました`);
+}
+
 function confirmDelete() {
+  return confirmMessage("選択中の項目を削除します。よろしいですか？");
+}
+
+function confirmMessage(message) {
   if (typeof window === "undefined" || typeof window.confirm !== "function") return true;
-  return window.confirm("選択中の項目を削除します。よろしいですか？");
+  return window.confirm(message);
 }
 
 function bindCommon() {
@@ -1709,6 +1730,12 @@ function bindCommon() {
       screen.timeDraft = button.dataset.editTime;
       screen.timeEditOriginal = button.dataset.editTime;
       render();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-time]").forEach((button) => {
+    button.addEventListener("click", () => {
+      deleteTimelineTime(button.dataset.deleteTime);
     });
   });
 

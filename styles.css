@@ -583,6 +583,35 @@ fieldset.field {
   outline-offset: 2px;
 }
 
+.time-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+}
+
+.time-delete-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border: 1px solid rgba(200, 95, 85, 0.35);
+  border-radius: 999px;
+  color: #9d3d35;
+  background: var(--coral-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.time-delete-label:hover,
+.time-delete-label:focus-visible {
+  color: white;
+  background: var(--coral);
+  outline: 2px solid rgba(200, 95, 85, 0.3);
+  outline-offset: 2px;
+}
+
 .timeline-cell.study {
   background: linear-gradient(90deg, rgba(47, 141, 135, 0.11), transparent);
 }
