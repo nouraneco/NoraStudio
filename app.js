@@ -11,6 +11,9 @@ const screen = {
   selectedRoomId: "",
   infoFilter: "すべて",
   reasonZoom: 1,
+  timeDialogOpen: false,
+  timeDraft: "",
+  timeEditOriginal: "",
   showReport: false,
 };
 
@@ -473,6 +476,9 @@ function resetProject() {
     selectedInfoCardId: "",
     selectedPathId: "",
     selectedRoomId: "",
+    timeDialogOpen: false,
+    timeDraft: "",
+    timeEditOriginal: "",
   });
   render();
 }
@@ -579,11 +585,11 @@ function ensureCharacterCount(count) {
 function render() {
   const app = document.querySelector("#app");
   if (screen.mode === "setup") {
-    app.innerHTML = setupScreen();
+    app.innerHTML = setupScreen() + timeDialogMarkup();
     bindCommon();
     return;
   }
-  app.innerHTML = shell(renderPage()) + toastMarkup();
+  app.innerHTML = shell(renderPage()) + toastMarkup() + timeDialogMarkup();
   bindCommon();
 }
 
@@ -626,7 +632,7 @@ function shell(page) {
   return `
     <div class="app">
       <aside class="sidebar">
-        <div class="brand"><span class="brand-mark">N</span>Nora Studio</div>
+        <button class="brand brand-button" data-home type="button"><span class="brand-mark">N</span>Nora Studio</button>
         <nav class="nav">
           ${navItems()
             .map(
@@ -642,7 +648,7 @@ function shell(page) {
       </aside>
       <main class="main">
         <header class="topbar">
-          <div class="project-name">${esc(project.scenario.title)}<span class="status-pill teal">編集中</span></div>
+          <button class="project-name project-home" data-home type="button">${esc(project.scenario.title)}<span class="status-pill teal">編集中</span></button>
           <div class="top-actions">
             <button class="button" data-save type="button">ブラウザ保存</button>
             <button class="button" data-export-project type="button">ファイル保存</button>
@@ -675,7 +681,7 @@ function pageHeader(title, subtitle) {
   return `
     <div class="page-head">
       <div>
-        <h1 class="page-title">${title}</h1>
+        <button class="page-title page-title-button" data-home type="button">${title}</button>
         <p class="page-subtitle">${subtitle}</p>
       </div>
     </div>
@@ -829,7 +835,10 @@ function timelinePage() {
             ${project.times
               .map(
                 (time) => `
-                  <div class="time-cell">${esc(time)}</div>
+                  <button class="time-cell time-edit-button" data-edit-time="${esc(time)}" type="button" title="時間帯を修正">
+                    <span class="time-value">${esc(time)}</span>
+                    <span class="time-edit-label">編集</span>
+                  </button>
                   ${project.characters.map((character) => timelineCell(time, character.id)).join("")}
                 `,
               )
@@ -1447,10 +1456,9 @@ function addItem(kind) {
     screen.selectedTimelineId = event.id;
   }
   if (kind === "time") {
-    const newTime = nextTimelineTime();
-    project.times.push(newTime);
-    project.times = [...new Set(project.times)].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
-    showToast(`${newTime}を追加しました`);
+    screen.timeDialogOpen = true;
+    screen.timeDraft = nextTimelineTime();
+    screen.timeEditOriginal = "";
   }
   if (kind === "info") {
     const card = {
@@ -1499,6 +1507,51 @@ function addItem(kind) {
   render();
 }
 
+function addCustomTime() {
+  const value = screen.timeDraft.trim();
+  if (!value) {
+    showToast("時間帯を入力してください");
+    return;
+  }
+  if (screen.timeEditOriginal && value === screen.timeEditOriginal) {
+    screen.timeDialogOpen = false;
+    screen.timeDraft = "";
+    screen.timeEditOriginal = "";
+    render();
+    return;
+  }
+  if (project.times.includes(value)) {
+    showToast("同じ時間帯がすでにあります");
+    return;
+  }
+  if (screen.timeEditOriginal) {
+    project.times = project.times.map((time) => (time === screen.timeEditOriginal ? value : time));
+    project.timelineEvents.forEach((event) => {
+      if (event.time === screen.timeEditOriginal) event.time = value;
+    });
+  } else {
+    project.times.push(value);
+  }
+  project.times = sortTimelineTimes(project.times);
+  screen.timeDialogOpen = false;
+  screen.timeDraft = "";
+  const original = screen.timeEditOriginal;
+  screen.timeEditOriginal = "";
+  render();
+  showToast(original ? `${original}を${value}に変更しました` : `${value}を追加しました`);
+}
+
+function sortTimelineTimes(times) {
+  return [...new Set(times)].sort((a, b) => {
+    const left = timeToMinutes(a);
+    const right = timeToMinutes(b);
+    if (!Number.isFinite(left) && !Number.isFinite(right)) return String(a).localeCompare(String(b), "ja");
+    if (!Number.isFinite(left)) return 1;
+    if (!Number.isFinite(right)) return -1;
+    return left - right;
+  });
+}
+
 function nextTimelineTime() {
   const latest = project.times
     .map(timeToMinutes)
@@ -1514,7 +1567,7 @@ function nextTimelineTime() {
 }
 
 function timeToMinutes(value) {
-  const match = String(value).match(/^(\d{1,2}):(\d{2})$/);
+  const match = String(value).match(/(\d{1,2}):(\d{2})/);
   if (!match) return Number.NaN;
   return Number(match[1]) * 60 + Number(match[2]);
 }
@@ -1641,8 +1694,53 @@ function bindCommon() {
     });
   });
 
+  document.querySelectorAll("[data-home]").forEach((button) => {
+    button.addEventListener("click", () => {
+      screen.mode = "app";
+      screen.active = "概要";
+      screen.showReport = false;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-edit-time]").forEach((button) => {
+    button.addEventListener("click", () => {
+      screen.timeDialogOpen = true;
+      screen.timeDraft = button.dataset.editTime;
+      screen.timeEditOriginal = button.dataset.editTime;
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.addEventListener("click", () => addItem(button.dataset.add));
+  });
+
+  document.querySelector("[data-time-input]")?.addEventListener("input", (event) => {
+    screen.timeDraft = event.target.value;
+  });
+
+  document.querySelector("[data-time-input]")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addCustomTime();
+    }
+    if (event.key === "Escape") {
+      screen.timeDialogOpen = false;
+      screen.timeEditOriginal = "";
+      render();
+    }
+  });
+
+  document.querySelector("[data-time-add]")?.addEventListener("click", addCustomTime);
+
+  document.querySelectorAll("[data-time-dialog-close]").forEach((button) => {
+    button.addEventListener("click", () => {
+      screen.timeDialogOpen = false;
+      screen.timeDraft = "";
+      screen.timeEditOriginal = "";
+      render();
+    });
   });
 
   document.querySelectorAll("[data-delete]").forEach((button) => {
@@ -1855,6 +1953,10 @@ function bindCommon() {
       render();
     });
   });
+
+  if (screen.timeDialogOpen) {
+    document.querySelector("[data-time-input]")?.focus();
+  }
 }
 
 function updateEntityValue(field) {
@@ -2028,6 +2130,27 @@ function downloadReport() {
 
 function toastMarkup() {
   return `<div class="toast" id="toast" hidden></div>`;
+}
+
+function timeDialogMarkup() {
+  if (!screen.timeDialogOpen) return "";
+  const isEdit = Boolean(screen.timeEditOriginal);
+  return `
+    <div class="modal-backdrop" data-time-dialog-close>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="time-dialog-title" onclick="event.stopPropagation()">
+        <h2 class="panel-title" id="time-dialog-title">${isEdit ? "時間帯を修正" : "時間帯を追加"}</h2>
+        <label class="field">
+          <span class="label">表に追加する時間帯</span>
+          <input class="input" data-time-input value="${esc(screen.timeDraft)}" placeholder="例: 23:30 または 23:30-24:00" autofocus />
+        </label>
+        <p class="page-subtitle">任意の表記で追加できます。時刻を含む場合は時間順に並びます。</p>
+        <div class="modal-actions">
+          <button class="button" data-time-dialog-close type="button">キャンセル</button>
+          <button class="button primary" data-time-add type="button">${isEdit ? "修正する" : "追加する"}</button>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function showToast(message) {
