@@ -399,6 +399,69 @@ function saveProject() {
   showToast("保存しました");
 }
 
+function exportProject() {
+  saveProject();
+  const payload = {
+    app: "Nora Studio",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    project,
+  };
+  downloadTextFile(
+    `${safeFileName(project.scenario.title || "nora-studio")}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json;charset=utf-8",
+  );
+  showToast("シナリオを書き出しました");
+}
+
+function importProject(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const parsed = JSON.parse(String(reader.result || "{}"));
+      const imported = parsed.project ?? parsed;
+      project = normalizeProject(mergeProject(defaultProject(), imported));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      Object.assign(screen, {
+        mode: "app",
+        active: "概要",
+        selectedCharacterId: "",
+        selectedTimelineId: "",
+        selectedInfoCardId: "",
+        selectedPathId: "",
+        selectedIssueId: "",
+        selectedRoomId: "",
+        showReport: false,
+      });
+      render();
+      showToast("シナリオを読み込みました");
+    } catch {
+      showToast("読み込みに失敗しました");
+    }
+  });
+  reader.readAsText(file, "utf-8");
+}
+
+function safeFileName(value) {
+  return String(value)
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80) || "nora-studio";
+}
+
+function downloadTextFile(filename, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function resetProject() {
   localStorage.removeItem(STORAGE_KEY);
   project = defaultProject();
@@ -550,8 +613,10 @@ function setupScreen() {
         </div>
         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
           <button class="button" data-reset type="button">新しい作品を作成</button>
+          <button class="button" data-import-button type="button">シナリオを読み込む</button>
           <button class="button primary" data-start type="button">この人数で始める</button>
         </div>
+        <input class="visually-hidden" data-import-file type="file" accept="application/json,.json" />
       </section>
     </main>
   `;
@@ -579,8 +644,11 @@ function shell(page) {
         <header class="topbar">
           <div class="project-name">${esc(project.scenario.title)}<span class="status-pill teal">編集中</span></div>
           <div class="top-actions">
-            <button class="button" data-save type="button">保存</button>
+            <button class="button" data-save type="button">ブラウザ保存</button>
+            <button class="button" data-export-project type="button">ファイル保存</button>
+            <button class="button" data-import-button type="button">読み込み</button>
             <button class="button" data-report-toggle type="button">プレビュー</button>
+            <input class="visually-hidden" data-import-file type="file" accept="application/json,.json" />
           </div>
         </header>
         <section class="content">${page}</section>
@@ -1379,8 +1447,10 @@ function addItem(kind) {
     screen.selectedTimelineId = event.id;
   }
   if (kind === "time") {
-    const newTime = "23:30";
-    if (!project.times.includes(newTime)) project.times.push(newTime);
+    const newTime = nextTimelineTime();
+    project.times.push(newTime);
+    project.times = [...new Set(project.times)].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+    showToast(`${newTime}を追加しました`);
   }
   if (kind === "info") {
     const card = {
@@ -1427,6 +1497,33 @@ function addItem(kind) {
     screen.selectedRoomId = room.id;
   }
   render();
+}
+
+function nextTimelineTime() {
+  const latest = project.times
+    .map(timeToMinutes)
+    .filter((minutes) => Number.isFinite(minutes))
+    .sort((a, b) => b - a)[0];
+  let next = Number.isFinite(latest) ? latest + 30 : 21 * 60;
+  let nextLabel = minutesToTime(next);
+  while (project.times.includes(nextLabel)) {
+    next += 30;
+    nextLabel = minutesToTime(next);
+  }
+  return nextLabel;
+}
+
+function timeToMinutes(value) {
+  const match = String(value).match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return Number.NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function minutesToTime(value) {
+  const normalized = Math.max(0, value);
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function deleteItem(kind) {
@@ -1566,6 +1663,20 @@ function bindCommon() {
 
   document.querySelector("[data-reset]")?.addEventListener("click", resetProject);
   document.querySelectorAll("[data-save]").forEach((button) => button.addEventListener("click", saveProject));
+  document
+    .querySelectorAll("[data-export-project]")
+    .forEach((button) => button.addEventListener("click", exportProject));
+  document.querySelectorAll("[data-import-button]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelector("[data-import-file]")?.click();
+    });
+  });
+  document.querySelectorAll("[data-import-file]").forEach((input) => {
+    input.addEventListener("change", () => {
+      importProject(input.files?.[0]);
+      input.value = "";
+    });
+  });
 
   document.querySelector("[data-toggle-map]")?.addEventListener("click", () => {
     project.mapEnabled = !project.mapEnabled;
@@ -1912,13 +2023,7 @@ function reportText() {
 }
 
 function downloadReport() {
-  const blob = new Blob([reportText()], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "nora-studio-report.txt";
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile("nora-studio-report.txt", reportText(), "text/plain;charset=utf-8");
 }
 
 function toastMarkup() {
